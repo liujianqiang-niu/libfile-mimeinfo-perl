@@ -1,7 +1,7 @@
 From d4ffc66bf0c8df4da59f428721965c62f4264840 Mon Sep 17 00:00:00 2001
 From: liujianqiang <liujianqiang@uniontech.com>
 Date: Tue, 19 May 2026 21:01:49 +0800
-Subject: [PATCH] fix: test
+Subject: [PATCH] fix: honor XDG_DATA_HOME precedence for extension globs
 
 ---
  MANIFEST                      |  1 +
