@@ -168,15 +168,25 @@ sub _hash_globs {
     open GLOB, '<', $file || croak "Could not open file '$file' for reading" ;
     binmode GLOB, ':utf8' unless $] < 5.008;
     my ($string, $glob);
+    my %seen_extension;
     while (<GLOB>) {
         next if /^\s*#/ or ! /\S/; # skip comments and empty lines
         chomp;
         ($string, $glob) = split /:/, $_, 2;
         unless ($glob =~ /[\?\*\[]/) { $literal{$glob} = $string }
         elsif ($glob =~ /^\*\.(\w+(\.\w+)*)$/) {
-            $extension{$1} = $string unless exists $extension{$1};
+            next if $seen_extension{$1}++;
+            if (exists $extension{$1} && $extension{$1} ne $string) {
+                my $old = $extension{$1};
+                if (defined $mime2ext{$old}) {
+                    @{$mime2ext{$old}} = grep { $_ ne $1 } @{$mime2ext{$old}};
+                    delete $mime2ext{$old} unless @{$mime2ext{$old}};
+                }
+            }
+            $extension{$1} = $string;
             $mime2ext{$string} = [] if !defined($mime2ext{$string});
-            push @{$mime2ext{$string}}, $1;
+            push @{$mime2ext{$string}}, $1
+                unless grep { $_ eq $1 } @{$mime2ext{$string}};
         } else { unshift @globs, [$glob, _glob_to_regexp($glob), $string] }
     }
     close GLOB || croak "Could not open file '$file' for reading" ;
