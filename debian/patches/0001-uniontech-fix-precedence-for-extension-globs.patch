@@ -1,0 +1,117 @@
+From d4ffc66bf0c8df4da59f428721965c62f4264840 Mon Sep 17 00:00:00 2001
+From: liujianqiang <liujianqiang@uniontech.com>
+Date: Tue, 19 May 2026 21:01:49 +0800
+Subject: [PATCH] fix: test
+
+---
+ MANIFEST                      |  1 +
+ lib/File/MimeInfo.pm          | 14 ++++++++--
+ t/12_xdg_extension_override.t | 51 +++++++++++++++++++++++++++++++++++
+ 3 files changed, 64 insertions(+), 2 deletions(-)
+ create mode 100644 t/12_xdg_extension_override.t
+
+diff --git a/MANIFEST b/MANIFEST
+index 98f1ef0..1833636 100644
+--- a/MANIFEST
++++ b/MANIFEST
+@@ -25,6 +25,7 @@ t/08_changes.t
+ t/09_no404s.t
+ t/10filehandle.t
+ t/11mimeinfo.t
++t/12_xdg_extension_override.t
+ t/applications/foo.desktop
+ t/applications/mimeinfo.cache
+ t/applications/mirage.desktop
+diff --git a/lib/File/MimeInfo.pm b/lib/File/MimeInfo.pm
+index d41f39b..3bdb84e 100644
+--- a/lib/File/MimeInfo.pm
++++ b/lib/File/MimeInfo.pm
+@@ -168,15 +168,25 @@ sub _hash_globs {
+     open GLOB, '<', $file || croak "Could not open file '$file' for reading" ;
+     binmode GLOB, ':utf8' unless $] < 5.008;
+     my ($string, $glob);
++    my %seen_extension;
+     while (<GLOB>) {
+         next if /^\s*#/ or ! /\S/; # skip comments and empty lines
+         chomp;
+         ($string, $glob) = split /:/, $_, 2;
+         unless ($glob =~ /[\?\*\[]/) { $literal{$glob} = $string }
+         elsif ($glob =~ /^\*\.(\w+(\.\w+)*)$/) {
+-            $extension{$1} = $string unless exists $extension{$1};
++            next if $seen_extension{$1}++;
++            if (exists $extension{$1} && $extension{$1} ne $string) {
++                my $old = $extension{$1};
++                if (defined $mime2ext{$old}) {
++                    @{$mime2ext{$old}} = grep { $_ ne $1 } @{$mime2ext{$old}};
++                    delete $mime2ext{$old} unless @{$mime2ext{$old}};
++                }
++            }
++            $extension{$1} = $string;
+             $mime2ext{$string} = [] if !defined($mime2ext{$string});
+-            push @{$mime2ext{$string}}, $1;
++            push @{$mime2ext{$string}}, $1
++                unless grep { $_ eq $1 } @{$mime2ext{$string}};
+         } else { unshift @globs, [$glob, _glob_to_regexp($glob), $string] }
+     }
+     close GLOB || croak "Could not open file '$file' for reading" ;
+diff --git a/t/12_xdg_extension_override.t b/t/12_xdg_extension_override.t
+new file mode 100644
+index 0000000..f91da72
+--- /dev/null
++++ b/t/12_xdg_extension_override.t
+@@ -0,0 +1,51 @@
++use strict;
++use warnings;
++
++use File::Path qw(make_path);
++use File::Spec;
++use File::Temp qw(tempdir);
++use Test::More;
++
++my $tmp = tempdir(CLEANUP => 1);
++my $home = File::Spec->catdir($tmp, 'home');
++my $dir  = File::Spec->catdir($tmp, 'dir');
++
++make_path(File::Spec->catdir($home, 'mime'));
++make_path(File::Spec->catdir($dir, 'mime'));
++
++my $home_globs = File::Spec->catfile($home, 'mime', 'globs');
++my $dir_globs  = File::Spec->catfile($dir, 'mime', 'globs');
++
++open my $sys_fh, '>', $dir_globs or die "Could not write $dir_globs: $!";
++print {$sys_fh} "application/x-system-doc:*.foo\n";
++close $sys_fh or die "Could not close $dir_globs: $!";
++
++open my $home_fh, '>', $home_globs or die "Could not write $home_globs: $!";
++print {$home_fh} "application/x-user-doc:*.foo\n";
++close $home_fh or die "Could not close $home_globs: $!";
++
++$ENV{XDG_DATA_HOME} = $home;
++$ENV{XDG_DATA_DIRS} = $dir;
++
++use_ok('File::MimeInfo', qw(extensions mimetype));
++
++File::MimeInfo::rehash();
++
++is(
++    mimetype('document.foo'),
++    'application/x-user-doc',
++    'XDG_DATA_HOME extension overrides XDG_DATA_DIRS extension',
++);
++
++is(
++    extensions('application/x-user-doc'),
++    'foo',
++    'reverse lookup returns the overriding extension mapping',
++);
++
++ok(
++    extensions('application/x-system-doc') eq '',
++    'overridden extension is removed from previous mimetype reverse lookup',
++);
++
++done_testing;
+\ No newline at end of file
+-- 
+2.50.1
+

@@ -1,3 +1,9 @@
+libfile-mimeinfo-perl (0.35-1deepin1) unstable; urgency=medium
+
+  * honor XDG_DATA_HOME precedence for extension globs.
+
+ -- liujianqiang <liujianqiang@uniontech.com>  Wed, 20 May 2026 15:53:05 +0800
+
 libfile-mimeinfo-perl (0.35-1) unstable; urgency=medium
 
   * Import upstream version 0.35.
